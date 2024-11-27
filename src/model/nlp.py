@@ -41,3 +41,5 @@ def text_extender(text,n_chars=200,temperature=1):
 
 tf.random.set_seed(42)
 print(text_extender("I told about tha", temperature=0.02))
+print(text_extender("I told about tha", temperature=1))
+print(text_extender("I told about tha", temperature=100))

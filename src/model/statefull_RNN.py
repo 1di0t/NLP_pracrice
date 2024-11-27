@@ -29,19 +29,22 @@ ds_size = len(encoded)
 
 len = 100
 tf.random.set_seed(42)
-train_set = to_dataset(encoded[:1_000_000], len=len, shuffle=True,
-seed=42, batch_size=512)
-valid_set = to_dataset(encoded[1_000_000:1_060_000], len=len, batch_size=512)
-test_set = to_dataset(encoded[1_060_000:], len=len, batch_size=512)
+train_set = to_dataset(encoded[:1_000_000], len,batch_size=512)
+valid_set = to_dataset(encoded[1_000_000:1_060_000], len,batch_size=512)
+test_set = to_dataset(encoded[1_060_000:], len,batch_size=512)
 
 train_set = train_set.prefetch(buffer_size=tf.data.AUTOTUNE)
 train_set = train_set.cache()
 
 model = tf.keras.Sequential([
-    tf.keras.layers.Embedding(input_dim=n_tokens, output_dim=16,),
-    tf.keras.layers.GRU(128, return_sequences=True),
+    tf.keras.layers.Embedding(input_dim=n_tokens, output_dim=16,batch_input_shape=[512, None]),
+    tf.keras.layers.GRU(128, return_sequences=True,stateful=True,),
     tf.keras.layers.Dense(n_tokens, activation="softmax"),
 ])
+
+class ResetStatesCallback(tf.keras.callbacks.Callback):
+    def on_epoch_begin(self, epoch, logs):
+        self.model.reset_states()
 
 model.compile(loss="sparse_categorical_crossentropy", optimizer="nadam",metrics=["accuracy"])
 
@@ -50,7 +53,7 @@ model.compile(loss="sparse_categorical_crossentropy", optimizer="nadam",metrics=
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 model_dir = os.path.join(current_dir, "../data/models")
-model_path = os.path.join(model_dir, "best_shakes_model.keras")
+model_path = os.path.join(model_dir, "Statefull_RNN_model.keras")
 
 os.makedirs(model_dir, exist_ok=True)
 
@@ -61,4 +64,4 @@ check_point = tf.keras.callbacks.ModelCheckpoint(
     save_weights_only=False,  
     mode="max"  
 )
-history = model.fit(train_set, epochs=10, validation_data=valid_set, callbacks=[check_point])
+history = model.fit(train_set, epochs=10, validation_data=valid_set, callbacks=[check_point, ResetStatesCallback()])
