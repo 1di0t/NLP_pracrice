@@ -1,5 +1,8 @@
-import tensorflow as tf
 from data_processing.split import to_dataset
+import tensorflow as tf
+import os
+
+
 
 
 shakespeare = "https://homl.info/shakespeare"
@@ -13,30 +16,28 @@ text_vector_layer = tf.keras.layers.TextVectorization(split="character",standard
 text_vector_layer.adapt([shakespeare_text])
 encoded = text_vector_layer([shakespeare_text])[0]
 
-#Reduce the token ID numbers corresponding to characters by 2 to remove padding tokens and OOV
-#패딩 토큰과 OOV를 제거하기 위해 문자에 해당하는 토큰 ID 번호를 2만큼 줄임
-encoded -= 2 
-#고유한 문자의 수
-# Number of distinct characters 
-n_tokens = text_vector_layer.vocabulary_size() - 2 
-#텍스트의 총 문자 수
-# Total number of characters in the text 
-ds_size = len(encoded)
+model = tf.keras.models.load_model("../data/models/best_shakes_model.keras")
 
-
-len = 100
-tf.random.set_seed(42)
-train_set = to_dataset(encoded[:1_000_000], len=len, shuffle=True,
-seed=42)
-valid_set = to_dataset(encoded[1_000_000:1_060_000], len=len)
-test_set = to_dataset(encoded[1_060_000:], len=len)
-
-model = tf.keras.Sequential([
-    tf.keras.layers.Embedding(input_dim=n_tokens, output_dim=16,),
-    tf.keras.layers.GRU(128, return_sequences=True),
-    tf.keras.layers.GRU(128, return_sequences=True),
-    tf.keras.layers.Dense(n_tokens, activation="softmax"),
+wrapped_model = tf.keras.Sequential([
+    text_vector_layer, 
+    tf.keras.layers.Lambda(lambda X: X-2),
+    model
 ])
-model.compile(loss="sparse_categorical_crossentropy", optimizer="adam",metrics=["accuracy"])
-check_point = tf.keras.callbacks.ModelCheckpoint("shakes_model.keras",monitor="val_accuracy",save_best_only=True)
-history = model.fit(train_set, epochs=10, validation_data=valid_set, callbacks=[check_point])
+
+log_probas = tf.math.log([0.5, 0.4, 0.1])
+tf.random.set_seed(42)  
+print(tf.random.categorical([log_probas], num_samples=10))
+
+def next_char(text, temperature=1):
+    y_proba = wrapped_model.predict([text])[0, -1:]
+    rescaled_logits = tf.math.log(y_proba) / temperature
+    char_id = tf.random.categorical(rescaled_logits, num_samples=1) [0,0]
+    return text_vector_layer.get_vocabulary()[char_id + 2]
+
+def text_extender(text,n_chars=200,temperature=1):
+    for _ in range(n_chars):
+        text += next_char(text,temperature)
+    return text
+
+tf.random.set_seed(42)
+print(text_extender("I told about tha", temperature=0.02))
